@@ -44,15 +44,18 @@ admin: public(address)
 NAME: constant(String[64]) = "stableflash.xyz"
 SYMBOL: constant(String[32]) = "STFL"
 DECIMALS: constant(uint256) = 18
-TOTAL_SUPPLY: constant(uint256) = 0
 
 @external
-def __init__():
+def __init__(supply: uint256):
     self.admin = msg.sender
     self.name = NAME
     self.symbol = SYMBOL
-    self.totalSupply = TOTAL_SUPPLY
+    self.totalSupply = supply
     self.decimals = DECIMALS
+
+    if supply > 0:
+        self.balanceOf[msg.sender] = supply * 10 ** DECIMALS
+        log Transfer(ZERO_ADDRESS, msg.sender, supply)
 
 
 @internal
