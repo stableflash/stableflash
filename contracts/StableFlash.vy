@@ -51,11 +51,12 @@ DECIMALS: constant(uint256) = 18
 
 
 @external
-def __init__(supply: uint256):
+def __init__(_supply: uint256):
     self.admin = msg.sender
     self.name = NAME
     self.symbol = SYMBOL
-    self.totalSupply = supply * 10 ** DECIMALS
+    supply: uint256 = _supply * 10 ** DECIMALS
+    self.totalSupply = supply
     self.decimals = DECIMALS
 
     self.flashFee = 0
@@ -63,8 +64,8 @@ def __init__(supply: uint256):
     self.feeDivider = 1
 
     if supply > 0:
-        self.balanceOf[msg.sender] = supply * 10 ** DECIMALS
-        log Transfer(ZERO_ADDRESS, msg.sender, supply * 10 ** DECIMALS)
+        self.balanceOf[msg.sender] = supply
+        log Transfer(ZERO_ADDRESS, msg.sender, supply)
 
 
 @internal
