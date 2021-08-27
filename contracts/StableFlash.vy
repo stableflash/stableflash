@@ -31,6 +31,10 @@ interface IFlashMinter:
 allowed: public(HashMap[address, bool])
 # Reserves of the stablecoin
 reserves: public(HashMap[address, uint256])
+# Fees
+swapFee: public(uint256)
+flashFee: public(uint256)
+feeDivider: public(uint256)
 
 # ERC20 details
 name: public(String[64])
@@ -52,6 +56,10 @@ def __init__(supply: uint256):
     self.symbol = SYMBOL
     self.totalSupply = supply * 10 ** DECIMALS
     self.decimals = DECIMALS
+
+    self.flashFee = 1
+    self.swapFee = 1
+    self.feeDivider = 1
 
     if supply > 0:
         self.balanceOf[msg.sender] = supply * 10 ** DECIMALS
@@ -182,6 +190,11 @@ def transferFrom(owner: address, receiver: address, amount: uint256) -> bool:
     return True
 
 
+@internal
+def _flashFee(amount: uint256) -> uint256:
+    return amount * self.flashFee / self.feeDivider
+
+
 @external
 @nonreentrant("lock")
 def flashLoan(
@@ -200,10 +213,11 @@ def flashLoan(
         Data to execute with flash loan operation
     """
     assert token == self
+    fee: uint256 = self._flashFee(amount)
 
     self._mint(msg.sender, amount)
-    IFlashMinter(receiver).onFlashLoan(msg.sender, token, amount, 0, data)
-    self._burn(msg.sender, amount)
+    IFlashMinter(receiver).onFlashLoan(msg.sender, token, amount, fee, data)
+    self._burn(msg.sender, amount + fee)
 
     return True
 
@@ -220,3 +234,26 @@ def allowToken(token: address, _allowed: bool):
     """
     assert msg.sender == self.admin
     self.allowed[token] = _allowed
+
+
+
+@external
+def updateFees(
+    _swapFee: uint256,
+    _flashFee: uint256, 
+    _feeDivider: uint256,
+):
+    """
+    @notice
+        Update fees for swap and flash mint
+    @param _swapFee
+        Swap fee
+    @param _flashFee
+        Flash mint fee
+    @param _feeDivider
+        Fee divider
+    """
+    assert msg.sender == self.admin
+    self.swapFee = _swapFee
+    self.flashFee = _flashFee
+    self.feeDivider = _feeDivider
