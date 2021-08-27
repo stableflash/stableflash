@@ -50,7 +50,7 @@ def __init__(supply: uint256):
     self.admin = msg.sender
     self.name = NAME
     self.symbol = SYMBOL
-    self.totalSupply = supply
+    self.totalSupply = supply * 10 ** DECIMALS
     self.decimals = DECIMALS
 
     if supply > 0:
