@@ -65,8 +65,17 @@ def test_swap(stable_flash, stablecoin):
     stablecoin.approve(stable_flash, 1e18)
     stablecoin_balance = stablecoin.balanceOf.call(a[0])
     stable_flash.swap(stablecoin, stablecoin, 1e18)
-    assert stable_flash.balanceOf.call(a[0]) == stablecoin_balance
+    assert stablecoin.balanceOf.call(a[0]) == stablecoin_balance
 
 def test_swap_not_allowed(stable_flash, stablecoin):
     with brownie.reverts():
-        stable_flash.swap(stablecoin, stablecoin, 1e18)    
+        stable_flash.swap(stablecoin, stablecoin, 1e18)
+
+def test_swap_fee(stable_flash, stablecoin):
+    stable_flash.updateFees(3, 1, 100)
+    stablecoin.approve(stable_flash, 1e18)
+    stablecoin.transfer(a[1], 999e18)
+    stable_flash.allowToken(stablecoin, True)
+    balance_before_swap = stable_flash.balanceOf.call(a[0])
+    stable_flash.swap(stablecoin, stablecoin, 1e18)
+    assert stable_flash.balanceOf.call(a[0]) >= balance_before_swap + 1e18 * 3 / 1000

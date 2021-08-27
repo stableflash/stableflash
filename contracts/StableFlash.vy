@@ -36,7 +36,7 @@ swapFee: public(uint256)
 flashFee: public(uint256)
 feeDivider: public(uint256)
 
-# ERC20 details
+# ERC20 details
 name: public(String[64])
 symbol: public(String[32])
 balanceOf: public(HashMap[address, uint256])
@@ -49,6 +49,7 @@ NAME: constant(String[64]) = "stableflash.xyz"
 SYMBOL: constant(String[32]) = "STFL"
 DECIMALS: constant(uint256) = 18
 
+
 @external
 def __init__(supply: uint256):
     self.admin = msg.sender
@@ -57,8 +58,8 @@ def __init__(supply: uint256):
     self.totalSupply = supply * 10 ** DECIMALS
     self.decimals = DECIMALS
 
-    self.flashFee = 1
-    self.swapFee = 1
+    self.flashFee = 0
+    self.swapFee = 0
     self.feeDivider = 1
 
     if supply > 0:
@@ -137,9 +138,11 @@ def swap(tokenIn: address, tokenOut: address, amount: uint256):
     """
     assert self.allowed[tokenIn] and self.allowed[tokenOut]
     ERC20(tokenIn).transferFrom(msg.sender, self, amount)
+    fee: uint256 = amount * self.swapFee / self.feeDivider
+    self._mint(self.admin, fee)
     self.reserves[tokenIn] += amount
-    self.reserves[tokenOut] -= amount
-    ERC20(tokenOut).transfer(msg.sender, amount)
+    self.reserves[tokenOut] -= amount - fee
+    ERC20(tokenOut).transfer(msg.sender, amount - fee)
 
 
 @external
@@ -218,6 +221,7 @@ def flashLoan(
     self._mint(msg.sender, amount)
     IFlashMinter(receiver).onFlashLoan(msg.sender, token, amount, fee, data)
     self._burn(msg.sender, amount + fee)
+    self._mint(self.admin, fee)
 
     return True
 
@@ -236,11 +240,10 @@ def allowToken(token: address, _allowed: bool):
     self.allowed[token] = _allowed
 
 
-
 @external
 def updateFees(
     _swapFee: uint256,
-    _flashFee: uint256, 
+    _flashFee: uint256,
     _feeDivider: uint256,
 ):
     """
