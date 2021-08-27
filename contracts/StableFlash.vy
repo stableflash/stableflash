@@ -64,7 +64,7 @@ def __init__(supply: uint256):
 
     if supply > 0:
         self.balanceOf[msg.sender] = supply * 10 ** DECIMALS
-        log Transfer(ZERO_ADDRESS, msg.sender, supply)
+        log Transfer(ZERO_ADDRESS, msg.sender, supply * 10 ** DECIMALS)
 
 
 @internal
