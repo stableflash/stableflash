@@ -184,8 +184,8 @@ def transferFrom(owner: address, receiver: address, amount: uint256) -> bool:
 
 @external
 @nonreentrant("lock")
-def flashMint(
-    receiver: address, token: address, amount: uint256, data: Bytes[1028] = b""
+def flashLoan(
+    receiver: address, token: address, amount: uint256, data: Bytes[1028]
 ) -> bool:
     """
     @notice
