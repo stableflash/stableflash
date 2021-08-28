@@ -93,6 +93,10 @@ def _transfer(sender: address, receiver: address, amount: uint256):
 
 
 @external
+# Nonreentrant because it aims to prevent
+# deposits & withdraws in the same block.
+# Flash minters can use swap() if they
+# want to convert their funds.
 @nonreentrant("swap")
 def deposit(token: address, amount: uint256):
     """
@@ -139,9 +143,13 @@ def swap(tokenIn: address, tokenOut: address, amount: uint256):
     """
     assert self.allowed[tokenIn] and self.allowed[tokenOut]
     ERC20(tokenIn).transferFrom(msg.sender, self, amount)
+    # Calculate the swap fee
     fee: uint256 = amount * self.swapFee / self.feeDivider
+    # Transfers the fee to admin
+    # TODO: Replace admin with DAO treasury
     self._mint(self.admin, fee)
     self.reserves[tokenIn] += amount
+    # Amount - fee is sent to msg.sender
     self.reserves[tokenOut] -= amount - fee
     ERC20(tokenOut).transfer(msg.sender, amount - fee)
 
