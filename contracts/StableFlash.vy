@@ -294,3 +294,9 @@ def updateFees(
     self.swapFee = _swapFee
     self.flashFee = _flashFee
     self.feeDivider = _feeDivider
+
+
+@external
+def transferAdmin(_admin: address):
+    assert msg.sender == self.admin
+    self.admin = _admin
