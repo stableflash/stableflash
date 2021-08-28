@@ -41,6 +41,8 @@ interaction: HashMap[uint256, HashMap[address, bool]]
 # will be converted to self if deposits
 # more than one from allowed tokens
 deposited: HashMap[address, address]
+# Maximum deposit allowed in contract
+maxDeposits: public(uint256)
 
 # ERC20 details
 name: public(String[64])
@@ -114,6 +116,7 @@ def deposit(token: address, amount: uint256):
     # Flash minters can use swap() if they
     # want to convert their funds.
     assert not self.interaction[block.number][msg.sender]
+    assert (self.maxDeposits >= self.totalSupply) or (self.maxDeposits == 0)
     self.interaction[block.number][msg.sender] = True
 
     if (self.deposited[msg.sender] != ZERO_ADDRESS) and (
@@ -294,6 +297,12 @@ def updateFees(
     self.swapFee = _swapFee
     self.flashFee = _flashFee
     self.feeDivider = _feeDivider
+
+
+@external
+def setMaxDeposits(_maxDeposits: uint256):
+    assert msg.sender == self.admin
+    self.maxDeposits = _maxDeposits
 
 
 @external
