@@ -4,6 +4,11 @@ from vyper.interfaces import ERC20
 implements: ERC20
 
 
+interface DetailedERC20:
+    def decimals() -> uint256:
+        view
+
+
 event Transfer:
     sender: indexed(address)
     receiver: indexed(address)
@@ -100,6 +105,17 @@ def _transfer(sender: address, receiver: address, amount: uint256):
     log Transfer(sender, receiver, amount)
 
 
+@internal
+def _scale(amount: uint256, _decimals: uint256, toScale: uint256 = 18) -> uint256:
+    scaled: uint256 = amount
+    if _decimals > toScale:
+        scaled = amount / 10 ** (_decimals - toScale)
+    if _decimals < toScale:
+        scaled = amount / 10 ** (toScale - _decimals)
+
+    return scaled
+
+
 @external
 @nonreentrant("swap")
 def deposit(token: address, amount: uint256):
@@ -127,8 +143,9 @@ def deposit(token: address, amount: uint256):
         self.deposited[msg.sender] = token
 
     ERC20(token).transferFrom(msg.sender, self, amount)
-    self.reserves[token] += amount
-    self.balanceOf[msg.sender] += amount
+    scaled: uint256 = self._scale(amount, DetailedERC20(token).decimals())
+    self.reserves[token] += scaled
+    self._mint(msg.sender, scaled)
 
 
 @external
@@ -146,11 +163,11 @@ def withdraw(token: address, amount: uint256):
     assert not self.interaction[block.number][msg.sender]
     self.interaction[block.number][msg.sender] = True
 
-    toWithdraw: uint256 = amount
+    toWithdraw: uint256 = self._scale(amount, 18, DetailedERC20(token).decimals())
     if not (self.deposited[msg.sender] == token):
         toWithdraw -= (toWithdraw * self.swapFee / self.feeDivider) / 2
 
-    self.balanceOf[msg.sender] -= amount
+    self._burn(msg.sender, amount)
     ERC20(token).transfer(msg.sender, toWithdraw)
 
     if self.balanceOf[msg.sender] == 0:
