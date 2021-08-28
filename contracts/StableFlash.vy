@@ -36,6 +36,8 @@ swapFee: public(uint256)
 flashFee: public(uint256)
 feeDivider: public(uint256)
 
+interaction: HashMap[uint256, HashMap[address, bool]]
+
 # ERC20 details
 name: public(String[64])
 symbol: public(String[32])
@@ -93,10 +95,6 @@ def _transfer(sender: address, receiver: address, amount: uint256):
 
 
 @external
-# Nonreentrant because it aims to prevent
-# deposits & withdraws in the same block.
-# Flash minters can use swap() if they
-# want to convert their funds.
 @nonreentrant("swap")
 def deposit(token: address, amount: uint256):
     """
@@ -108,6 +106,12 @@ def deposit(token: address, amount: uint256):
         Amount to mint and transfer in token
     """
     assert self.allowed[token]
+    # It it aims to prevent deposits & withdraws in the same block.
+    # Flash minters can use swap() if they
+    # want to convert their funds.
+    assert not self.interaction[block.number][msg.sender]
+    self.interaction[block.number][msg.sender] = True
+
     ERC20(token).transferFrom(msg.sender, self, amount)
     self.reserves[token] += amount
     self.balanceOf[msg.sender] += amount
@@ -125,6 +129,9 @@ def withdraw(token: address, amount: uint256):
         Amount to burn in balance and receive in token
     """
     assert self.allowed[token]
+    assert not self.interaction[block.number][msg.sender]
+    self.interaction[block.number][msg.sender] = True
+
     self.balanceOf[msg.sender] -= amount
     ERC20(token).transfer(msg.sender, amount)
 

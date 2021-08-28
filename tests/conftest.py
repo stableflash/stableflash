@@ -17,3 +17,7 @@ def flash_minter():
 @pytest.fixture
 def fake_minter():
     yield a[0].deploy(FakeMinter)
+
+@pytest.fixture
+def free_swap():
+    yield a[0].deploy(FreeSwap)
