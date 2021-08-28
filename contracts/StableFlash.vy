@@ -35,8 +35,12 @@ reserves: public(HashMap[address, uint256])
 swapFee: public(uint256)
 flashFee: public(uint256)
 feeDivider: public(uint256)
-
+# Did user used withdraw or deposit at block?
 interaction: HashMap[uint256, HashMap[address, bool]]
+# User deposited token
+# will be converted to self if deposits
+# more than one from allowed tokens
+deposited: HashMap[address, address]
 
 # ERC20 details
 name: public(String[64])
@@ -112,6 +116,13 @@ def deposit(token: address, amount: uint256):
     assert not self.interaction[block.number][msg.sender]
     self.interaction[block.number][msg.sender] = True
 
+    if (self.deposited[msg.sender] != ZERO_ADDRESS) and (
+        self.deposited[msg.sender] != token
+    ):
+        self.deposited[msg.sender] = self
+    else:
+        self.deposited[msg.sender] = token
+
     ERC20(token).transferFrom(msg.sender, self, amount)
     self.reserves[token] += amount
     self.balanceOf[msg.sender] += amount
@@ -132,8 +143,15 @@ def withdraw(token: address, amount: uint256):
     assert not self.interaction[block.number][msg.sender]
     self.interaction[block.number][msg.sender] = True
 
+    toWithdraw: uint256 = amount
+    if not (self.deposited[msg.sender] == token):
+        toWithdraw -= (toWithdraw * self.swapFee / self.feeDivider) / 2
+
     self.balanceOf[msg.sender] -= amount
-    ERC20(token).transfer(msg.sender, amount)
+    ERC20(token).transfer(msg.sender, toWithdraw)
+
+    if self.balanceOf[msg.sender] == 0:
+        self.deposited[msg.sender] = ZERO_ADDRESS
 
 
 @external

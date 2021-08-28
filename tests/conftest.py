@@ -11,6 +11,10 @@ def stablecoin():
     yield a[0].deploy(StableFlash, 1000)
 
 @pytest.fixture
+def another_stablecoin():
+    yield a[0].deploy(StableFlash, 1000)
+
+@pytest.fixture
 def flash_minter():
     yield a[0].deploy(FlashMinter)
 
