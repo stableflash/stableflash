@@ -1,4 +1,17 @@
 # @version 0.2.15
+"""
+@title Stable Flash
+@license MIT
+@author stableflash.xyz
+@notice
+    Deposit tokens from the list of approved stablecoins to receive an almost 1-to-1 backed 
+    ERC20 token that does have flash loan and swap capability.
+
+    Tokens may be approved or disapproved by the admin.
+    Once admin approves token, the specified token may be deposited into the contract and
+    can be converted for other approved tokens with enough reserves, fee may be charged.
+"""
+
 from vyper.interfaces import ERC20
 
 implements: ERC20
@@ -21,7 +34,22 @@ event Approval:
     amount: uint256
 
 
+event UpdateAdmin:
+    admin: address
+
+
+event UpdateFees:
+    swapFee: uint256
+    flashFee: uint256
+    feeDivider: uint256
+
+
+event UpdateMaxDeposits:
+    maxDeposits: uint256
+
+
 interface IFlashMinter:
+    # ERC-3156
     def onFlashLoan(
         sender: address,
         token: address,
@@ -42,8 +70,7 @@ flashFee: public(uint256)
 feeDivider: public(uint256)
 # Did user used withdraw or deposit at block?
 interaction: HashMap[uint256, HashMap[address, bool]]
-# User deposited token
-# will be converted to self if deposits
+# User deposited token will be converted to self if deposits
 # more than one from allowed tokens
 deposited: HashMap[address, address]
 # Maximum deposit allowed in contract
@@ -107,6 +134,9 @@ def _transfer(sender: address, receiver: address, amount: uint256):
 
 @internal
 def _scale(amount: uint256, _decimals: uint256, toScale: uint256 = 18) -> uint256:
+    # Scale function aims to convert tokens where decimals are not enough
+    # or higher than required. It is probably not higher than required.
+    # DAO should consider this feature when listing a token.
     scaled: uint256 = amount
     if _decimals > toScale:
         scaled = amount / 10 ** (_decimals - toScale)
@@ -122,6 +152,12 @@ def deposit(token: address, amount: uint256):
     """
     @notice
         Deposit token to receive amount in your balance
+
+        If you deposit more than one token types, there will be discount
+        on the withdrawal and you'll pay half of the fee with swap.
+
+        If you deposit only one from the allowed tokens, there will be no
+        fees on the withdrawal.
     @param token
         Token to deposit
     @param amount
@@ -154,6 +190,9 @@ def withdraw(token: address, amount: uint256):
     """
     @notice
         Withdraw balance in token
+
+        Withdraw fee may be charged if you are withdrawing
+        different token than you deposited before.
     @param token
         Token to receive
     @param amount
@@ -165,6 +204,8 @@ def withdraw(token: address, amount: uint256):
 
     toWithdraw: uint256 = self._scale(amount, 18, DetailedERC20(token).decimals())
     if not (self.deposited[msg.sender] == token):
+        # In this case, user probably deposited more than one token for this reason,
+        # there will be half of the swap fee charged from this operation
         toWithdraw -= (toWithdraw * self.swapFee / self.feeDivider) / 2
 
     self._burn(msg.sender, amount)
@@ -315,9 +356,20 @@ def updateFees(
     self.flashFee = _flashFee
     self.feeDivider = _feeDivider
 
+    log UpdateFees(_swapFee, _flashFee, _feeDivider)
+
 
 @external
 def setMaxDeposits(_maxDeposits: uint256):
+    """
+    @notice
+        Set maximum allowed deposits on the contract
+
+        If total supply already exceeds max deposits, deposits will be blocked.
+        Set max deposits to 0 for no limits on deposits.
+    @param _maxDeposits
+        Max deposits allowed
+    """
     assert msg.sender == self.admin
     self.maxDeposits = _maxDeposits
 
@@ -326,3 +378,4 @@ def setMaxDeposits(_maxDeposits: uint256):
 def transferAdmin(_admin: address):
     assert msg.sender == self.admin
     self.admin = _admin
+    log UpdateAdmin(_admin)
