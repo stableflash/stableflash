@@ -72,7 +72,7 @@ feeDivider: public(uint256)
 interaction: HashMap[uint256, HashMap[address, bool]]
 # User deposited token will be converted to self if deposits
 # more than one from allowed tokens
-deposited: HashMap[address, address]
+deposited: public(HashMap[address, HashMap[address, uint256]])
 # Maximum deposit allowed in contract
 maxDeposits: public(uint256)
 
@@ -170,13 +170,7 @@ def deposit(token: address, amount: uint256):
     assert not self.interaction[block.number][msg.sender]
     assert (self.maxDeposits >= self.totalSupply) or (self.maxDeposits == 0)
     self.interaction[block.number][msg.sender] = True
-
-    if (self.deposited[msg.sender] != ZERO_ADDRESS) and (
-        self.deposited[msg.sender] != token
-    ):
-        self.deposited[msg.sender] = self
-    else:
-        self.deposited[msg.sender] = token
+    self.deposited[msg.sender][token] += amount
 
     ERC20(token).transferFrom(msg.sender, self, amount)
     scaled: uint256 = self._scale(amount, DetailedERC20(token).decimals())
@@ -203,16 +197,32 @@ def withdraw(token: address, amount: uint256):
     self.interaction[block.number][msg.sender] = True
 
     toWithdraw: uint256 = self._scale(amount, 18, DetailedERC20(token).decimals())
-    if not (self.deposited[msg.sender] == token):
+    if not (self.deposited[msg.sender][token] >= amount):
         # In this case, user probably deposited more than one token for this reason,
         # there will be half of the swap fee charged from this operation
         toWithdraw -= (toWithdraw * self.swapFee / self.feeDivider) / 2
+    else:
+        self.deposited[msg.sender][token] -= toWithdraw
 
     self._burn(msg.sender, amount)
     ERC20(token).transfer(msg.sender, toWithdraw)
 
-    if self.balanceOf[msg.sender] == 0:
-        self.deposited[msg.sender] = ZERO_ADDRESS
+@external
+def emergencyWithdraw(token: address, amount: uint256):
+    """
+    @notice
+        Allow users to withdraw a delisted token with zero fees
+
+        There will be no fees on the withdrawal.
+    @param token
+        Token that is removed from contract
+    @param amount
+        Amount to withdraw
+    """
+    assert not self.allowed[token]
+    self._burn(msg.sender, amount)
+    self.reserves[token] -= amount
+    ERC20(token).transfer(msg.sender, amount)
 
 
 @external

@@ -96,18 +96,3 @@ def test_deposit_withdraw_without_swap(stable_flash, stablecoin):
     stable_flash.deposit(stablecoin, 1e18)
     stable_flash.withdraw(stablecoin, 1e18)
     assert stablecoin.balanceOf.call(a[0]) == pre_deposit
-
-
-def test_deposit_withdraw_swap(stable_flash, stablecoin, another_stablecoin):
-    stablecoin.approve(stable_flash, 1e18)
-    stable_flash.updateFees(3, 1, 100)
-    stable_flash.allowToken(stablecoin, True)
-    stable_flash.deposit(stablecoin, 1e18)
-
-    stable_flash.allowToken(another_stablecoin, True)
-    pre_deposit = another_stablecoin.balanceOf.call(a[0])
-    another_stablecoin.approve(stable_flash, 1e18)
-    stable_flash.deposit(another_stablecoin, 1e18)
-
-    stable_flash.withdraw(another_stablecoin, 1e18)
-    assert another_stablecoin.balanceOf.call(a[0]) == pre_deposit - ((1e18 * 3 / 100) / 2)
