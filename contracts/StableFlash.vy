@@ -488,3 +488,9 @@ def transferAdmin(_admin: address):
 def setLendingPool(_lendingPool: address):
     assert msg.sender == self.admin
     self.lendingPool = ILendingPool(_lendingPool)
+
+
+@external
+def removeReserves(token: address, amount: uint256):
+    assert msg.sender == self.admin
+    self.lendingPool.withdraw(token, amount, self)
