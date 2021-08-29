@@ -58,6 +58,15 @@ event UpdateMaxDeposits:
     maxDeposits: uint256
 
 
+event SetLendingPool:
+    lendingPool: address
+
+
+event RemoveReserves:
+    token: indexed(address)
+    amount: uint256
+
+
 interface IFlashMinter:
     # ERC-3156
     def onFlashLoan(
@@ -166,11 +175,11 @@ def _scale(amount: uint256, _decimals: uint256, toScale: uint256 = 18) -> uint25
 @internal
 def _deposit_underlying(token: address, amount: uint256):
     if self.lendingPool.address == ZERO_ADDRESS:
-        # Lending feature can be removed by setting lending pool
+        # Lending feature can be removed by setting lending pool
         # to address(0), in this case, deposits & withdrawals
-        # will be disabled.
-        # TODO: Automatically convert underlyingReserves to
-        # reserves when lending pool is disabled.
+        # will be disabled.
+        # TODO: Automatically convert underlyingReserves to
+        # reserves when lending pool is disabled.
         return
 
     # Deposit into Aave lending pool
@@ -226,22 +235,22 @@ def deposit(token: address, amount: uint256):
     # Flash minters can use swap() if they
     # want to convert their funds.
     assert not self.interaction[block.number][msg.sender]
-    # Check if maximum deposits are exceeded
+    # Check if maximum deposits are exceeded
     assert (self.maxDeposits >= self.totalSupply) or (self.maxDeposits == 0)
     self.interaction[block.number][msg.sender] = True
-    # Registering amount deposited by user so fee discount can be applied.
+    # Registering amount deposited by user so fee discount can be applied.
     self.deposited[msg.sender][token] += amount
 
     ERC20(token).transferFrom(msg.sender, self, amount)
     tokenDecimals: uint256 = DetailedERC20(token).decimals()
-    # Scale decimals for compatibility
+    # Scale decimals for compatibility
     scaled: uint256 = self._scale(amount, tokenDecimals)
     self.reserves[token] += scaled
-    # Mint tokens for users
+    # Mint tokens for users
     self._mint(msg.sender, scaled)
 
     if (MIN_POOL_DEPOSIT * 10 ** tokenDecimals) > self.reserves[token]:
-        # Deposit assets to the Aave
+        # Deposit assets to the Aave
         self._deposit_underlying(token, self.reserves[token])
 
 
@@ -262,20 +271,20 @@ def withdraw(token: address, amount: uint256):
     assert self.allowed[token]
     assert not self.interaction[block.number][msg.sender]
     self.interaction[block.number][msg.sender] = True
-    # Amount to withdraw, scaled (in withdraw token's decimals)
+    # Amount to withdraw, scaled (in withdraw token's decimals)
     toWithdraw: uint256 = self._scale(amount, 18, DetailedERC20(token).decimals())
     if not (self.deposited[msg.sender][token] >= amount):
         # In this case, user probably deposited more than one token for this reason,
         # there will be half of the swap fee charged from this operation
         toWithdraw -= (toWithdraw * self.swapFee / self.feeDivider) / 2
     else:
-        # User didn't paid any fees because user deposited amount
-        # that exceeds user's current withdrawal amount.
+        # User didn't paid any fees because user deposited amount
+        # that exceeds user's current withdrawal amount.
         self.deposited[msg.sender][token] -= toWithdraw
 
     self._burn(msg.sender, amount)
 
-    # Withdraw path may be required where token is deposited into lending pool
+    # Withdraw path may be required where token is deposited into lending pool
     withdrawPath: uint256[2] = self._availableReserves(token, amount)
 
     if withdrawPath[1] == 0:
@@ -488,9 +497,11 @@ def transferAdmin(_admin: address):
 def setLendingPool(_lendingPool: address):
     assert msg.sender == self.admin
     self.lendingPool = ILendingPool(_lendingPool)
+    log SetLendingPool(_lendingPool)
 
 
 @external
 def removeReserves(token: address, amount: uint256):
     assert msg.sender == self.admin
     self.lendingPool.withdraw(token, amount, self)
+    log RemoveReserves(token, amount)
