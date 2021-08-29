@@ -482,3 +482,9 @@ def transferAdmin(_admin: address):
     assert msg.sender == self.admin
     self.admin = _admin
     log UpdateAdmin(_admin)
+
+
+@external
+def setLendingPool(_lendingPool: address):
+    assert msg.sender == self.admin
+    self.lendingPool = ILendingPool(_lendingPool)
