@@ -97,6 +97,8 @@ maxDeposits: public(uint256)
 
 # Aave strategy
 lendingPool: public(ILendingPool)
+# Lending supported for token
+lendingAvailable: public(HashMap[address, bool])
 # Reserves inside lending pool
 underlyingReserves: public(HashMap[address, uint256])
 
@@ -249,7 +251,7 @@ def deposit(token: address, amount: uint256):
     # Mint tokens for users
     self._mint(msg.sender, scaled)
 
-    if (MIN_POOL_DEPOSIT * 10 ** tokenDecimals) > self.reserves[token]:
+    if ((MIN_POOL_DEPOSIT * 10 ** tokenDecimals) > self.reserves[token]) and (self.lendingAvailable[token]):
         # Deposit assets to the Aave
         self._deposit_underlying(token, self.reserves[token])
 
@@ -508,8 +510,31 @@ def setLendingPool(_lendingPool: address):
 
 @external
 def removeReserves(token: address, amount: uint256):
+    """
+    @notice
+        Remove reserves
+    @param token
+        Token to remove reserves
+    @param amount
+        Amount to remove from underlying reserves
+    """
     assert msg.sender == self.admin
     self.lendingPool.withdraw(token, amount, self)
     self.underlyingReserves[token] -= amount
     self.reserves[token] += amount
     log RemoveReserves(token, amount)
+
+
+@external
+def updateLending(token: address, enabled: bool):
+    """
+    @notice
+        Update lending status, changes whether token is available for
+        deposit & withdrawal to the lending pool.
+    @param token
+        Token to update lending status
+    @param enabled
+        If True, lending is allowed
+    """
+    assert msg.sender == self.admin
+    self.lendingAvailable[token] = enabled
