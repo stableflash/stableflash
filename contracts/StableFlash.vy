@@ -495,6 +495,12 @@ def transferAdmin(_admin: address):
 
 @external
 def setLendingPool(_lendingPool: address):
+    """
+    @notice
+        Set lending pool
+    @param _lendingPool
+        Address of lending pool
+    """
     assert msg.sender == self.admin
     self.lendingPool = ILendingPool(_lendingPool)
     log SetLendingPool(_lendingPool)
@@ -504,4 +510,6 @@ def setLendingPool(_lendingPool: address):
 def removeReserves(token: address, amount: uint256):
     assert msg.sender == self.admin
     self.lendingPool.withdraw(token, amount, self)
+    self.underlyingReserves[token] -= amount
+    self.reserves[token] += amount
     log RemoveReserves(token, amount)
