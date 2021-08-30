@@ -97,7 +97,7 @@ maxDeposits: public(uint256)
 
 # Aave strategy
 lendingPool: public(ILendingPool)
-# Lending supported for token
+# Lending supported for token
 lendingAvailable: public(HashMap[address, bool])
 # Reserves inside lending pool
 underlyingReserves: public(HashMap[address, uint256])
@@ -180,8 +180,6 @@ def _deposit_underlying(token: address, amount: uint256):
         # Lending feature can be removed by setting lending pool
         # to address(0), in this case, deposits & withdrawals
         # will be disabled.
-        # TODO: Automatically convert underlyingReserves to
-        # reserves when lending pool is disabled.
         return
 
     # Deposit into Aave lending pool
@@ -251,7 +249,9 @@ def deposit(token: address, amount: uint256):
     # Mint tokens for users
     self._mint(msg.sender, scaled)
 
-    if ((MIN_POOL_DEPOSIT * 10 ** tokenDecimals) > self.reserves[token]) and (self.lendingAvailable[token]):
+    if ((MIN_POOL_DEPOSIT * 10 ** tokenDecimals) > self.reserves[token]) and (
+        self.lendingAvailable[token]
+    ):
         # Deposit assets to the Aave
         self._deposit_underlying(token, self.reserves[token])
 
