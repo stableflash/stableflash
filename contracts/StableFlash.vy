@@ -27,6 +27,11 @@ interface ILendingPool:
         nonpayable
 
 
+interface IProtocolDataProvider:
+    def getReserveTokensAddresses(asset: address) -> (address, address, address):
+        view
+
+
 event Transfer:
     sender: indexed(address)
     receiver: indexed(address)
@@ -97,15 +102,19 @@ maxDeposits: public(uint256)
 
 # Aave strategy
 lendingPool: public(ILendingPool)
+# Protocol data provider
+dataProvider: public(IProtocolDataProvider)
 # Lending supported for token
 lendingAvailable: public(HashMap[address, bool])
 # Reserves inside lending pool
 underlyingReserves: public(HashMap[address, uint256])
+# Earnings through the pool
+earnings: public(HashMap[address, uint256])
 
 # ERC20 details
 name: public(String[64])
 symbol: public(String[32])
-balanceOf: public(HashMap[address, uint256])
+balances: public(HashMap[address, uint256])
 allowance: public(HashMap[address, HashMap[address, uint256]])
 totalSupply: public(uint256)
 decimals: public(uint256)
@@ -132,13 +141,13 @@ def __init__(_supply: uint256):
     self.feeDivider = 1
 
     if supply > 0:
-        self.balanceOf[msg.sender] = supply
+        self.balances[msg.sender] = supply
         log Transfer(ZERO_ADDRESS, msg.sender, supply)
 
 
 @internal
 def _mint(receiver: address, amount: uint256):
-    self.balanceOf[receiver] += amount
+    self.balances[receiver] += amount
     self.totalSupply += amount
 
     log Transfer(ZERO_ADDRESS, receiver, amount)
@@ -146,7 +155,7 @@ def _mint(receiver: address, amount: uint256):
 
 @internal
 def _burn(sender: address, amount: uint256):
-    self.balanceOf[sender] -= amount
+    self.balances[sender] -= amount
     self.totalSupply -= amount
 
     log Transfer(sender, ZERO_ADDRESS, amount)
@@ -154,8 +163,8 @@ def _burn(sender: address, amount: uint256):
 
 @internal
 def _transfer(sender: address, receiver: address, amount: uint256):
-    self.balanceOf[sender] -= amount
-    self.balanceOf[receiver] += amount
+    self.balances[sender] -= amount
+    self.balances[receiver] += amount
 
     log Transfer(sender, receiver, amount)
 
@@ -175,7 +184,7 @@ def _scale(amount: uint256, _decimals: uint256, toScale: uint256 = 18) -> uint25
 
 
 @internal
-def _deposit_underlying(token: address, amount: uint256):
+def _depositUnderlying(token: address, amount: uint256):
     if self.lendingPool.address == ZERO_ADDRESS:
         # Lending feature can be removed by setting lending pool
         # to address(0), in this case, deposits & withdrawals
@@ -197,6 +206,25 @@ def _deposit_underlying(token: address, amount: uint256):
     self.underlyingReserves[token] += amount
     self.reserves[token] -= amount
     log StrategyDeposit(token, amount)
+
+
+@internal
+@view
+def _calculateTokenRewards(user: address, token: address) -> uint256:
+    # Calculate rewards for specific token
+    # Rewards can be claimed once for each token
+    if (self.balances[user] == 0) or (not self.lendingAvailable[token]):
+        return 0
+
+    poolBalance: uint256 = ERC20(
+        self.dataProvider.getReserveTokensAddresses(token)[0]
+    ).balanceOf(self)
+    rewards: uint256 = (
+        (poolBalance - self.underlyingReserves[token])
+        * self.balances[user]
+        / self.totalSupply
+    )
+    return rewards
 
 
 @internal
@@ -253,7 +281,7 @@ def deposit(token: address, amount: uint256):
         self.lendingAvailable[token]
     ):
         # Deposit assets to the Aave
-        self._deposit_underlying(token, self.reserves[token])
+        self._depositUnderlying(token, self.reserves[token])
 
 
 @external
@@ -392,6 +420,18 @@ def transferFrom(owner: address, receiver: address, amount: uint256) -> bool:
     return True
 
 
+@external
+@view
+def balanceOf(user: address) -> uint256:
+    return self.balances[user]
+
+
+@external
+@view
+def balanceOfRewards(user: address, pool: address) -> uint256:
+    return self.balances[user] + self._calculateTokenRewards(user, pool)
+
+
 @internal
 def _flashFee(amount: uint256) -> uint256:
     return amount * self.flashFee / self.feeDivider
@@ -526,7 +566,7 @@ def removeReserves(token: address, amount: uint256):
 
 
 @external
-def updateLending(token: address, enabled: bool):
+def updateLending(_dataProvider: address, token: address, enabled: bool):
     """
     @notice
         Update lending status, changes whether token is available for
@@ -537,4 +577,10 @@ def updateLending(token: address, enabled: bool):
         If True, lending is allowed
     """
     assert msg.sender == self.admin
+
+    if _dataProvider == ZERO_ADDRESS:
+        assert self.dataProvider.address != ZERO_ADDRESS
+    else:
+        self.dataProvider = IProtocolDataProvider(_dataProvider)
+
     self.lendingAvailable[token] = enabled
