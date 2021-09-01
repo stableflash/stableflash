@@ -476,7 +476,7 @@ def setMaxDeposits(_maxDeposits: uint256):
 @external
 def transferAdmin(_admin: address):
     """
-    @notive
+    @notice
         Transfer admin
     @param _admin
         New admin
@@ -490,9 +490,9 @@ def transferAdmin(_admin: address):
 def setStrategy(_strategy: address):
     """
     @notice
-        Set lending pool
-    @param _lendingPool
-        Address of lending pool
+        Set strategy
+    @param _strategy
+        Address of strategy
     """
     assert msg.sender == self.admin
     self.strategy = IStrategy(_strategy)
