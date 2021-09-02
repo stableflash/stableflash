@@ -517,7 +517,7 @@ def removeReserves(token: address, amount: uint256):
 
 
 @external
-def updateLending(_dataProvider: address, token: address, enabled: bool):
+def updateLending(token: address, enabled: bool):
     """
     @notice
         Update lending status, changes whether token is available for
