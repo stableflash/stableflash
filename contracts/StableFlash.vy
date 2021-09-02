@@ -90,6 +90,7 @@ reserves: public(HashMap[address, uint256])
 swapFee: public(uint256)
 flashFee: public(uint256)
 feeDivider: public(uint256)
+upcomingFees: public(uint256[4])
 # Did user used withdraw or deposit at block?
 interaction: HashMap[uint256, HashMap[address, bool]]
 # User deposited token will be converted to self if deposits
@@ -121,6 +122,7 @@ SYMBOL: constant(String[32]) = "STFL"
 DECIMALS: constant(uint256) = 18
 # Minimum deposit for a token for Aave
 MIN_POOL_DEPOSIT: constant(uint256) = 10_000
+ADMIN_WAIT: constant(uint256) = 86400
 
 
 @external
@@ -451,11 +453,25 @@ def updateFees(
         Fee divider
     """
     assert msg.sender == self.admin
-    self.swapFee = _swapFee
-    self.flashFee = _flashFee
-    self.feeDivider = _feeDivider
+    self.upcomingFees[0] = _swapFee
+    self.upcomingFees[1] = _flashFee
+    self.upcomingFees[2] = _feeDivider
+    self.upcomingFees[3] = block.timestamp + ADMIN_WAIT
 
     log UpdateFees(_swapFee, _flashFee, _feeDivider)
+
+
+@external
+def acceptFees():
+    """
+    @notice
+        Accept fees
+    """
+    assert block.timestamp > self.upcomingFees[3]
+
+    self.swapFee = self.upcomingFees[0]
+    self.flashFee = self.upcomingFees[1]
+    self.feeDivider = self.upcomingFees[2]
 
 
 @external
