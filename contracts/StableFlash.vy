@@ -89,14 +89,18 @@ struct UpcomingFees:
     effectiveAt: uint256
 
 
+struct Fees:
+    swapFee: uint256
+    flashFee: uint256
+    feeDivider: uint256
+
+
 # Allowed stablecoins for the deposit
 allowed: public(HashMap[address, bool])
 # Reserves of the stablecoin
 reserves: public(HashMap[address, uint256])
 # Fees
-swapFee: public(uint256)
-flashFee: public(uint256)
-feeDivider: public(uint256)
+fees: public(Fees)
 upcomingFees: public(UpcomingFees)
 # Did user used withdraw or deposit at block?
 interaction: HashMap[uint256, HashMap[address, bool]]
@@ -141,9 +145,7 @@ def __init__(_supply: uint256):
     self.totalSupply = supply
     self.decimals = DECIMALS
 
-    self.flashFee = 0
-    self.swapFee = 0
-    self.feeDivider = 1
+    self.fees = Fees({swapFee: 0, flashFee: 0, feeDivider: 1})
 
     if supply > 0:
         self.balances[msg.sender] = supply
@@ -272,7 +274,7 @@ def withdraw(token: address, amount: uint256):
     if not (self.deposited[msg.sender][token] >= amount):
         # In this case, user probably deposited more than one token for this reason,
         # there will be half of the swap fee charged from this operation
-        toWithdraw -= (toWithdraw * self.swapFee / self.feeDivider) / 2
+        toWithdraw -= (toWithdraw * self.fees.swapFee / self.fees.feeDivider) / 2
     else:
         # User didn't paid any fees because user deposited amount
         # that exceeds user's current withdrawal amount.
@@ -328,7 +330,7 @@ def swap(tokenIn: address, tokenOut: address, amount: uint256):
     assert self.allowed[tokenIn] and self.allowed[tokenOut]
     ERC20(tokenIn).transferFrom(msg.sender, self, amount)
     # Calculate the swap fee
-    fee: uint256 = amount * self.swapFee / self.feeDivider
+    fee: uint256 = amount * self.fees.swapFee / self.fees.feeDivider
     # Transfers the fee to admin
     # TODO: Replace admin with DAO treasury
     self._mint(self.admin, fee)
@@ -394,7 +396,7 @@ def balanceOf(user: address) -> uint256:
 
 @internal
 def _flashFee(amount: uint256) -> uint256:
-    return amount * self.flashFee / self.feeDivider
+    return amount * self.fees.flashFee / self.fees.feeDivider
 
 
 @external
@@ -480,9 +482,13 @@ def acceptFees():
     """
     assert block.timestamp > self.upcomingFees.effectiveAt
 
-    self.swapFee = self.upcomingFees.swapFee
-    self.flashFee = self.upcomingFees.flashFee
-    self.feeDivider = self.upcomingFees.feeDivider
+    self.fees = Fees(
+        {
+            swapFee: self.upcomingFees.swapFee,
+            flashFee: self.upcomingFees.flashFee,
+            feeDivider: self.upcomingFees.feeDivider,
+        }
+    )
 
 
 @external
