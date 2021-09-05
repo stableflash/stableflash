@@ -82,6 +82,13 @@ interface IStrategy:
         nonpayable
 
 
+struct UpcomingFees:
+    swapFee: uint256
+    flashFee: uint256
+    feeDivider: uint256
+    effectiveAt: uint256
+
+
 # Allowed stablecoins for the deposit
 allowed: public(HashMap[address, bool])
 # Reserves of the stablecoin
@@ -90,7 +97,7 @@ reserves: public(HashMap[address, uint256])
 swapFee: public(uint256)
 flashFee: public(uint256)
 feeDivider: public(uint256)
-upcomingFees: public(uint256[4])
+upcomingFees: public(UpcomingFees)
 # Did user used withdraw or deposit at block?
 interaction: HashMap[uint256, HashMap[address, bool]]
 # User deposited token will be converted to self if deposits
@@ -453,10 +460,14 @@ def updateFees(
         Fee divider
     """
     assert msg.sender == self.admin
-    self.upcomingFees[0] = _swapFee
-    self.upcomingFees[1] = _flashFee
-    self.upcomingFees[2] = _feeDivider
-    self.upcomingFees[3] = block.timestamp + ADMIN_WAIT
+    self.upcomingFees = UpcomingFees(
+        {
+            swapFee: _swapFee,
+            flashFee: _flashFee,
+            feeDivider: _feeDivider,
+            effectiveAt: block.timestamp + ADMIN_WAIT,
+        }
+    )
 
     log UpdateFees(_swapFee, _flashFee, _feeDivider)
 
@@ -467,11 +478,11 @@ def acceptFees():
     @notice
         Accept fees
     """
-    assert block.timestamp > self.upcomingFees[3]
+    assert block.timestamp > self.upcomingFees.effectiveAt
 
-    self.swapFee = self.upcomingFees[0]
-    self.flashFee = self.upcomingFees[1]
-    self.feeDivider = self.upcomingFees[2]
+    self.swapFee = self.upcomingFees.swapFee
+    self.flashFee = self.upcomingFees.flashFee
+    self.feeDivider = self.upcomingFees.feeDivider
 
 
 @external
