@@ -82,6 +82,14 @@ interface IStrategy:
         nonpayable
 
 
+interface IOracle:
+    def latestAnswer() -> uint256:
+        view
+
+    def decimals() -> uint256:
+        view
+
+
 struct UpcomingFees:
     swapFee: uint256
     flashFee: uint256
@@ -95,8 +103,14 @@ struct Fees:
     feeDivider: uint256
 
 
+struct Stablecoin:
+    allowed: bool
+    disabled: bool
+    oracle: address
+
+
 # Allowed stablecoins for the deposit
-allowed: public(HashMap[address, bool])
+coins: public(HashMap[address, Stablecoin])
 # Reserves of the stablecoin
 reserves: public(HashMap[address, uint256])
 # Fees
@@ -226,7 +240,7 @@ def deposit(token: address, amount: uint256):
     @param amount
         Amount to mint and transfer in token
     """
-    assert self.allowed[token]
+    assert self.coins[token].allowed
     # It it aims to prevent deposits & withdraws in the same block.
     # Flash minters can use swap() if they
     # want to convert their funds.
@@ -266,7 +280,7 @@ def withdraw(token: address, amount: uint256):
     @param amount
         Amount to burn in balance and receive in token
     """
-    assert self.allowed[token]
+    assert self.coins[token].allowed
     assert not self.interaction[block.number][msg.sender]
     self.interaction[block.number][msg.sender] = True
     # Amount to withdraw, scaled (in withdraw token's decimals)
@@ -309,7 +323,7 @@ def emergencyWithdraw(token: address, amount: uint256):
     @param amount
         Amount to withdraw
     """
-    assert not self.allowed[token]
+    assert not self.coins[token].allowed
     self._burn(msg.sender, amount)
     self.reserves[token] -= amount
     ERC20(token).transfer(msg.sender, amount)
@@ -327,7 +341,7 @@ def swap(tokenIn: address, tokenOut: address, amount: uint256):
     @param amount
         Amount you'll send & receive (stable swap)
     """
-    assert self.allowed[tokenIn] and self.allowed[tokenOut]
+    assert self.coins[tokenIn].allowed and self.coins[tokenOut].allowed
     ERC20(tokenIn).transferFrom(msg.sender, self, amount)
     # Calculate the swap fee
     fee: uint256 = amount * self.fees.swapFee / self.fees.feeDivider
@@ -428,7 +442,7 @@ def flashLoan(
 
 
 @external
-def allowToken(token: address, _allowed: bool):
+def allowToken(token: address, _allowed: bool, _oracle: address):
     """
     @notice
         Allow token to be deposited
@@ -438,11 +452,14 @@ def allowToken(token: address, _allowed: bool):
         Whether to allow deposits or not
     """
     assert msg.sender == self.admin
-    self.allowed[token] = _allowed
+    self.coins[token].allowed = _allowed
+
     if _allowed:
         ERC20(token).approve(self.strategy.address, MAX_UINT256)
+        self.coins[token].oracle = _oracle
     else:
         ERC20(token).approve(self.strategy.address, 0)
+        self.coins[token].disabled = _allowed
 
 
 @external
@@ -562,3 +579,45 @@ def updateLending(token: address, enabled: bool):
     """
     assert msg.sender == self.admin
     self.lendingAvailable[token] = enabled
+
+
+@external
+def disableToken(token: address):
+    """
+    @notice
+        Disable a allowed token if oracle price is lower than minimum
+        allowed threshold
+    @param token
+        Token to disable
+    """
+    price: uint256 = IOracle(self.coins[token].oracle).latestAnswer()
+    _decimals: uint256 = IOracle(self.coins[token].oracle).decimals()
+    qty: uint256 = 10 ** _decimals
+
+    minimum: uint256 = qty - (qty * 3 / 100)
+    assert price <= minimum, "Not eligible for temporary disable"
+
+    self.coins[token].allowed = False
+    self.coins[token].disabled = True
+
+
+@external
+def enableToken(token: address):
+    """
+    @notice
+        Enable a temporarily disabled stablecoin token if oracle is higher than
+        minimum allowed threshold
+    @param token
+        Token to re-enable
+    """
+    assert self.coins[token].disabled, "Not already disabled"
+
+    price: uint256 = IOracle(self.coins[token].oracle).latestAnswer()
+    _decimals: uint256 = IOracle(self.coins[token].oracle).decimals()
+    qty: uint256 = 10 ** _decimals
+
+    minimum: uint256 = qty - (qty * 3 / 100)
+    assert price >= minimum, "Not eligible for enabling"
+
+    self.coins[token].allowed = True
+    self.coins[token].disabled = False
